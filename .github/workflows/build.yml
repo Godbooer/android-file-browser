@@ -37,6 +37,11 @@ jobs:
         env:
           ANDROIDSDK: /home/runner/.buildozer/android/platform/android-sdk
           ANDROIDNDK: /home/runner/.buildozer/android/platform/android-ndk-r25c
+          # 修复 Android NDK 下 grpmodule 缺少 setgrent/getgrent/endgrent 的问题
+          CFLAGS: '-Wno-error=implicit-function-declaration'
+          CXXFLAGS: '-Wno-error=implicit-function-declaration'
+          # 修复编码问题
+          LC_ALL: 'C.UTF-8'
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

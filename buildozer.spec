@@ -43,7 +43,7 @@ android.ndk = 25c
 android.private_storage = True
 
 # (str) Requirements (comma separated)
-requirements = python3,kivy==2.3.1,Pillow,pillow-heif,ffpyplayer
+requirements = python3,kivy==2.3.1,Pillow,pillow-heif
 
 # (str) Android entry point
 services = none
@@ -55,7 +55,7 @@ log_level = 2
 preserve.env = False
 
 # (list) Source files to include
-source.include_exts = py,png,jpg,jpeg,kv,atlas,json
+source.include_exts = py,png,jpg,jpeg,kv,atlas,json,txt
 
 # (list) List of inclusions (patterns)
 source.include_patterns = *
