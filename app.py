@@ -26,6 +26,7 @@ from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.utils import platform
 from kivy.storage.jsonstore import JsonStore
+from kivy.metrics import dp
 
 # ──────────────────────────────────────────
 # 视频支持检测
@@ -334,22 +335,29 @@ class FileBrowserScreen(Screen):
         self.current_filter = 'all'
         self._breadcrumb_paths = []
         self._setup_ui()
+        # 监听窗口大小变化，动态调整网格列数
+        Window.bind(on_resize=self._on_window_resize)
 
     def _get_start_path(self):
         """获取起始路径"""
         if platform == 'android':
-            # 动态请求 Android 存储权限
+            # 动态请求 Android 存储权限（含 Android 11+ 全存储）
             try:
                 from android.permissions import request_permissions, Permission
-                request_permissions([
+                perms = [
                     Permission.READ_EXTERNAL_STORAGE,
                     Permission.WRITE_EXTERNAL_STORAGE,
-                ])
+                ]
+                # Android 11+ 需要 MANAGE_EXTERNAL_STORAGE
+                if hasattr(Permission, 'MANAGE_EXTERNAL_STORAGE'):
+                    perms.append(Permission.MANAGE_EXTERNAL_STORAGE)
+                request_permissions(perms)
             except Exception:
                 pass
-            home = '/storage/emulated/0'
-            if os.path.exists(home):
-                return home
+            # 小米平板 8 内部存储路径
+            for path in ['/storage/emulated/0', '/sdcard', '/storage']:
+                if os.path.exists(path):
+                    return path
             return '/'
         elif os.path.exists('/sdcard'):
             return '/sdcard'
@@ -417,9 +425,10 @@ class FileBrowserScreen(Screen):
             filter_bar.add_widget(btn)
         self.layout.add_widget(filter_bar)
 
-        # ── 文件列表（可滚动网格） ──
+        # ── 文件列表（可滚动网格，列数动态适配屏幕宽度） ──
         self.scroll_view = ScrollView()
-        self.grid = GridLayout(cols=3, spacing=5, padding=10, size_hint_y=None)
+        self._grid_cols = self._calc_grid_cols(Window.width)
+        self.grid = GridLayout(cols=self._grid_cols, spacing=dp(5), padding=dp(10), size_hint_y=None)
         self.grid.bind(minimum_height=self.grid.setter('height'))
         self.scroll_view.add_widget(self.grid)
         self.layout.add_widget(self.scroll_view)
@@ -472,6 +481,25 @@ class FileBrowserScreen(Screen):
             self._breadcrumb_paths.append(self.current_path)
             self.current_path = folder_path
             self.path_input.text = self.current_path
+            self._load_files()
+
+    def _calc_grid_cols(self, width):
+        """根据屏幕宽度计算网格列数（平板使用更多列）"""
+        if width > 2000:
+            return 6  # 小平板横屏
+        elif width > 1500:
+            return 5  # 小平板竖屏/大屏手机横屏
+        elif width > 1000:
+            return 4  # 大屏手机
+        else:
+            return 3  # 手机
+
+    def _on_window_resize(self, instance, width, height):
+        """窗口大小变化时重新调整网格列数"""
+        new_cols = self._calc_grid_cols(width)
+        if new_cols != self._grid_cols:
+            self._grid_cols = new_cols
+            self.grid.cols = new_cols
             self._load_files()
 
     def _open_file(self, file_path):

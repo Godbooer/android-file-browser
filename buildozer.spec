@@ -19,10 +19,10 @@ source.dir = .
 # presplash.filename = presplash.png
 
 # (str) Application versioning
-version = 2.0.0
+version = 2.1.0
 
 # (list) Permissions
-android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
+android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
 
 # (bool) Accept Android SDK licenses
 android.accept_sdk_license = True
