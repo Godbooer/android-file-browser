@@ -62,7 +62,10 @@ jobs:
           echo "=== Patch complete ==="
 
       - name: Build APK
+        env:
+          JAVA_HOME: "/usr/lib/jvm/temurin-17-jdk-amd64"
         run: |
+          export JAVA_HOME="/usr/lib/jvm/temurin-17-jdk-amd64"
           export ANDROIDSDK="/home/runner/.buildozer/android/platform/android-sdk"
           export ANDROIDNDK="/home/runner/.buildozer/android/platform/android-ndk-r25c"
           export CFLAGS="-Wno-error=implicit-function-declaration"
