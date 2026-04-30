@@ -20,33 +20,46 @@ jobs:
             git zip unzip openjdk-17-jdk python3-pip \
             autoconf libtool pkg-config zlib1g-dev cmake \
             libffi-dev libssl-dev python3-setuptools patchelf \
-            libncurses5 libncurses-dev curl wget
+            libncurses5 libncurses-dev
           pip3 install --upgrade pip -q
-          pip3 install 'buildozer<2' 'cython<3' -q
+          pip3 install 'buildozer<2' 'cython<3' python-for-android -q
 
-      - name: Install and patch python-for-android
+      - name: Patch ALL p4a sources
         run: |
-          # Install p4a explicitly so we can patch it BEFORE buildozer uses it
-          pip3 install python-for-android 2>&1 | tail -3
+          echo "=== Patching entrypoint = spec[1] bug in ALL locations ==="
+          # The fix changes: entrypoint = spec[1] 
+          # To: entrypoint = spec[0] if len(spec) > 0 else "main"
+          FIX_CMD="s/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else 'main'/g"
           
-          # Find and fix the IndexError bug in p4a's bootstrap template
-          echo "=== Patching p4a source ==="
-          P4A_DIR=$(python3 -c "import pythonforandroid; import os; print(os.path.dirname(pythonforandroid.__file__))" 2>/dev/null)
-          echo "p4a location: $P4A_DIR"
-          
-          if [ -n "$P4A_DIR" ]; then
-            # Fix the entrypoint bug in the template
-            find "$P4A_DIR" -name "build.py" -path "*/bootstraps/*" | while read f; do
-              if grep -q "entrypoint = spec\[1\]" "$f" 2>/dev/null; then
-                echo "PATCHING: $f"
-                sed -i 's/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else "main"/g' "$f"
-                grep "entrypoint = spec" "$f" | head -3
-              fi
+          # 1. Patch pip-installed p4a
+          echo "--- Pip location ---"
+          P4A_PIP=$(python3 -c "import pythonforandroid; print(pythonforandroid.__file__)" 2>/dev/null | xargs dirname)
+          if [ -n "$P4A_PIP" ]; then
+            find "$P4A_PIP" -name "*.py" -type f -exec grep -l "entrypoint = spec\[1\]" {} \; 2>/dev/null | while read f; do
+              echo "PIP-PATCH: $f"
+              sed -i "$FIX_CMD" "$f"
             done
-            echo "=== Patch complete ==="
-          else
-            echo "WARNING: Could not find p4a source directory"
           fi
+          
+          # 2. Patch any existing .buildozer (from cache)
+          echo "--- .buildozer location ---"
+          if [ -d ".buildozer" ]; then
+            find .buildozer -name "*.py" -type f -exec grep -l "entrypoint = spec\[1\]" {} \; 2>/dev/null | while read f; do
+              echo "BUILD-PATCH: $f"
+              sed -i "$FIX_CMD" "$f"
+            done
+          fi
+          
+          # 3. Patch all Python site-packages
+          echo "--- site-packages ---"
+          for pkgdir in /home/runner/.local /usr/local /usr /opt; do
+            find "$pkgdir" -path "*/pythonforandroid/*" -name "*.py" -type f -exec grep -l "entrypoint = spec\[1\]" {} \; 2>/dev/null | while read f; do
+              echo "PKG-PATCH: $f"
+              sed -i "$FIX_CMD" "$f"
+            done
+          done
+          
+          echo "=== Patch complete ==="
 
       - name: Build APK
         run: |
@@ -56,6 +69,31 @@ jobs:
           export CXXFLAGS="-Wno-error=implicit-function-declaration"
           export LC_ALL="C.UTF-8"
           
+          # Phase 1: Let buildozer download p4a + SDK + NDK (will fail at IndexError)
+          echo "=== Phase 1: Initialize build environment ==="
+          buildozer android debug 2>&1 || echo "PHASE1_DONE"
+          
+          # Phase 2: Patch p4a template in buildozer's own directory
+          echo "=== Phase 2: Patch p4a template (the ACTUAL source) ==="
+          P4A_DIR=".buildozer/android/platform/python-for-android"
+          if [ -d "$P4A_DIR" ]; then
+            find "$P4A_DIR" -name "*.py" -type f | while read f; do
+              if grep -q 'entrypoint = spec\[1\]' "$f" 2>/dev/null; then
+                echo "PATCHING source: $f"
+                sed -i 's/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else "main"/g' "$f"
+              fi
+            done
+          fi
+          
+          # Phase 3: Remove the buggy generated build.py so p4a regenerates it
+          echo "=== Phase 3: Clear generated dist files ==="
+          find .buildozer -path "*/dists/*" -name "build.py" -type f 2>/dev/null | while read f; do
+            echo "REMOVE: $f"
+            rm -f "$f"
+          done
+          
+          # Phase 4: Rebuild with patched p4a
+          echo "=== Phase 4: Rebuild APK ==="
           buildozer android debug
 
       - name: Upload APK artifact
