@@ -24,6 +24,9 @@ version = 2.0.0
 # (list) Permissions
 android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
 
+# (bool) Accept Android SDK licenses
+android.accept_sdk_license = True
+
 # (int) Android API level to use
 android.api = 34
 
