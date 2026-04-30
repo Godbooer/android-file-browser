@@ -27,8 +27,7 @@ android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
 # (bool) Accept Android SDK licenses
 android.accept_sdk_license = True
 
-# (str) Explicit entry point for p4a (fixes IndexError when auto-parsing fails)
-android.p4a_extra_args = --entry-point, AndroidFileBrowserApp
+
 
 # (int) Android API level to use
 android.api = 34

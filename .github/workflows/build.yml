@@ -3,11 +3,11 @@ name: Build APK
 on:
   push:
     branches: [ "main", "master" ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # 使用 Ubuntu 22.04 (24.04 有 Buildozer 兼容问题)
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout code
@@ -29,18 +29,23 @@ jobs:
             python3-setuptools patchelf \
             libncurses5-dev libncursesw5-dev
           pip3 install --upgrade pip
-          pip3 install buildozer 'cython<3'
+          pip3 install 'buildozer<2' 'cython<3'
 
       - name: Build APK with Buildozer
         run: |
+          buildozer android debug 2>&1 || true
+          # Patch p4a bug: entrypoint = spec[1] when spec has < 2 elements
+          echo "Patching p4a generated build.py files..."
+          find .buildozer -name "build.py" -exec \
+            sed -i 's/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else "main"/g' {} \; 2>/dev/null || true
+          # Retry after patching
+          echo "Retrying build after p4a patch..."
           buildozer android debug
         env:
           ANDROIDSDK: /home/runner/.buildozer/android/platform/android-sdk
           ANDROIDNDK: /home/runner/.buildozer/android/platform/android-ndk-r25c
-          # 修复 Android NDK 下 grpmodule 缺少 setgrent/getgrent/endgrent 的问题
           CFLAGS: '-Wno-error=implicit-function-declaration'
           CXXFLAGS: '-Wno-error=implicit-function-declaration'
-          # 修复编码问题
           LC_ALL: 'C.UTF-8'
 
       - name: Upload APK artifact
