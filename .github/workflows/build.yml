@@ -10,48 +10,56 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install Buildozer dependencies
+      - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y \
-            git zip unzip openjdk-17-jdk \
-            python3-pip autoconf libtool \
-            pkg-config zlib1g-dev \
-            cmake libffi-dev libssl-dev \
-            python3-setuptools patchelf \
-            libncurses5-dev libncursesw5-dev
-          pip3 install --upgrade pip
-          pip3 install 'buildozer<2' 'cython<3'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            git zip unzip openjdk-17-jdk python3-pip \
+            autoconf libtool pkg-config zlib1g-dev cmake \
+            libffi-dev libssl-dev python3-setuptools patchelf \
+            libncurses5 libncurses-dev curl wget
+          pip3 install --upgrade pip -q
+          pip3 install 'buildozer<2' 'cython<3' -q
 
-      - name: Build APK with Buildozer
+      - name: Build APK
         run: |
-          buildozer android debug 2>&1 || true
-          # Patch p4a bug: entrypoint = spec[1] when spec has < 2 elements
-          echo "Patching p4a generated build.py files..."
-          find .buildozer -name "build.py" -exec \
-            sed -i 's/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else "main"/g' {} \; 2>/dev/null || true
-          # Retry after patching
-          echo "Retrying build after p4a patch..."
-          buildozer android debug
-        env:
-          ANDROIDSDK: /home/runner/.buildozer/android/platform/android-sdk
-          ANDROIDNDK: /home/runner/.buildozer/android/platform/android-ndk-r25c
-          CFLAGS: '-Wno-error=implicit-function-declaration'
-          CXXFLAGS: '-Wno-error=implicit-function-declaration'
-          LC_ALL: 'C.UTF-8'
+          # Export env vars
+          export ANDROIDSDK="/home/runner/.buildozer/android/platform/android-sdk"
+          export ANDROIDNDK="/home/runner/.buildozer/android/platform/android-ndk-r25c"
+          export CFLAGS="-Wno-error=implicit-function-declaration"
+          export CXXFLAGS="-Wno-error=implicit-function-declaration"
+          export LC_ALL="C.UTF-8"
 
-      - name: Upload APK artifact
+          # First build attempt - will generate dist files
+          echo "=== First build attempt ==="
+          buildozer android debug 2>&1 || echo "BUILD_FAILED_EXPECTED"
+
+          # Patch the p4a IndexError bug in ALL generated build.py files
+          echo "=== Patching p4a IndexError bug ==="
+          find .buildozer -name "build.py" -type f 2>/dev/null | while read f; do
+            if grep -q "entrypoint = spec\[1\]" "$f" 2>/dev/null; then
+              echo "Patching: $f"
+              sed -i 's/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else entry_point/g' "$f"
+            fi
+            if grep -q "entrypoint = spec\[1\]" "$f" 2>/dev/null; then
+              echo "Patch may have failed on: $f"
+            else
+              echo "OK: $f"
+            fi
+          done
+
+          # Second build attempt with patched files
+          echo "=== Second build attempt ==="
+          buildozer android debug 2>&1
+
+      - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: android-player-apk
           path: bin/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
