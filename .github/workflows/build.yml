@@ -24,38 +24,41 @@ jobs:
           pip3 install --upgrade pip -q
           pip3 install 'buildozer<2' 'cython<3' -q
 
+      - name: Install and patch python-for-android
+        run: |
+          # Install p4a explicitly so we can patch it BEFORE buildozer uses it
+          pip3 install python-for-android 2>&1 | tail -3
+          
+          # Find and fix the IndexError bug in p4a's bootstrap template
+          echo "=== Patching p4a source ==="
+          P4A_DIR=$(python3 -c "import pythonforandroid; import os; print(os.path.dirname(pythonforandroid.__file__))" 2>/dev/null)
+          echo "p4a location: $P4A_DIR"
+          
+          if [ -n "$P4A_DIR" ]; then
+            # Fix the entrypoint bug in the template
+            find "$P4A_DIR" -name "build.py" -path "*/bootstraps/*" | while read f; do
+              if grep -q "entrypoint = spec\[1\]" "$f" 2>/dev/null; then
+                echo "PATCHING: $f"
+                sed -i 's/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else "main"/g' "$f"
+                grep "entrypoint = spec" "$f" | head -3
+              fi
+            done
+            echo "=== Patch complete ==="
+          else
+            echo "WARNING: Could not find p4a source directory"
+          fi
+
       - name: Build APK
         run: |
-          # Export env vars
           export ANDROIDSDK="/home/runner/.buildozer/android/platform/android-sdk"
           export ANDROIDNDK="/home/runner/.buildozer/android/platform/android-ndk-r25c"
           export CFLAGS="-Wno-error=implicit-function-declaration"
           export CXXFLAGS="-Wno-error=implicit-function-declaration"
           export LC_ALL="C.UTF-8"
+          
+          buildozer android debug
 
-          # First build attempt - will generate dist files
-          echo "=== First build attempt ==="
-          buildozer android debug 2>&1 || echo "BUILD_FAILED_EXPECTED"
-
-          # Patch the p4a IndexError bug in ALL generated build.py files
-          echo "=== Patching p4a IndexError bug ==="
-          find .buildozer -name "build.py" -type f 2>/dev/null | while read f; do
-            if grep -q "entrypoint = spec\[1\]" "$f" 2>/dev/null; then
-              echo "Patching: $f"
-              sed -i 's/entrypoint = spec\[1\]/entrypoint = spec[0] if len(spec) > 0 else entry_point/g' "$f"
-            fi
-            if grep -q "entrypoint = spec\[1\]" "$f" 2>/dev/null; then
-              echo "Patch may have failed on: $f"
-            else
-              echo "OK: $f"
-            fi
-          done
-
-          # Second build attempt with patched files
-          echo "=== Second build attempt ==="
-          buildozer android debug 2>&1
-
-      - name: Upload APK
+      - name: Upload APK artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
