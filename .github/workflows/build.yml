@@ -29,7 +29,7 @@ jobs:
             python3-setuptools patchelf \
             libncurses5-dev libncursesw5-dev
           pip3 install --upgrade pip
-          pip3 install buildozer cython
+          pip3 install buildozer 'cython<3'
 
       - name: Build APK with Buildozer
         run: |
