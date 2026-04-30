@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # 使用 Ubuntu 22.04 (24.04 有 Buildozer 兼容问题)
 
     steps:
       - name: Checkout code
@@ -26,7 +26,8 @@ jobs:
             python3-pip autoconf libtool \
             pkg-config zlib1g-dev \
             cmake libffi-dev libssl-dev \
-            python3-setuptools patchelf
+            python3-setuptools patchelf \
+            libncurses5-dev libncursesw5-dev
           pip3 install --upgrade pip
           pip3 install buildozer cython
 
