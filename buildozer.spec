@@ -43,7 +43,7 @@ android.ndk = 25c
 android.private_storage = True
 
 # (str) Requirements (comma separated)
-requirements = python3,kivy==2.3.1,Pillow,pillow-heif
+requirements = python3,kivy==2.3.1,Pillow
 
 # (str) Android entry point
 services = none
